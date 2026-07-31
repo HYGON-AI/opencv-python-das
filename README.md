@@ -1,5 +1,12 @@
 [![Downloads](https://static.pepy.tech/badge/opencv-python)](http://pepy.tech/project/opencv-python)
 
+**This is a HCU-adapted fork of [opencv-python](https://github.com/opencv/opencv-python).**
+
+- Modified by Hygon Information Technology Co., Ltd. for HCU platform support.
+- The upstream opencv-python project is maintained by the OpenCV team.
+- This fork is based on the 4.9.0 release.
+- Key modifications include HCU/HIP backend build support.
+
 ### Keep OpenCV Free
 
 OpenCV is raising funds to keep the library free for everyone, and we need the support of the entire community to do it. [Donate to OpenCV on IndieGoGo](http://igg.me/at/opencv5) to show your support.
