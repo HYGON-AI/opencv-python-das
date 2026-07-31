@@ -1,6 +1,35 @@
 import sys
 import subprocess
 from datetime import date
+import os
+
+UNKNOWN = "Unknown"
+
+def dtk_version_value():
+    try:
+        dtk_path=os.getenv('ROCM_PATH')
+        dtk_version_path = os.path.join(dtk_path, '.info', "version-dev")
+        with open(dtk_version_path, 'r',encoding='utf-8') as file:
+            lines = file.readlines()
+        dtk_version="dtk"+lines[0][:].replace(".", "")
+        return dtk_version
+    except Exception:
+       return UNKNOWN
+
+def opencv_whl_name():
+    try:
+        if (os.getenv('DAS_VERSION')):
+            das_version=str(os.getenv('DAS_VERSION'))
+        else:
+            das_version= "1.1"
+        if (os.getenv('OPT_VERSION')):
+            opt_version=str(os.getenv('OPT_VERSION'))
+        else:
+            opt_version= "1"
+        whl_name = "das"+ "." + "opt" + opt_version
+        return whl_name
+    except Exception:
+        return UNKNOWN
 
 if __name__ == "__main__":
     contrib = sys.argv[1]
@@ -56,16 +85,17 @@ if __name__ == "__main__":
     if len(tag) == 1:
         # tag identifies the build and should be a sequential revision number
         version = tag[0]
-        opencv_version += ".{}".format(version)
+        # opencv_version += ".{}".format(version)
     # rolling has converted into string using get_and_set_info() function in setup.py
     elif rolling == "True":
         # rolling version identifier, will be published in a dedicated rolling PyPI repository
         version = date.today().strftime('%Y%m%d')
-        opencv_version += ".{}".format(version)
+        # opencv_version += ".{}".format(version)
     else:
         # local version identifier, not to be published on PyPI
         version = git_hash
-        opencv_version += "+{}".format(version)
+        # opencv_version += "+{}".format(version)
+    opencv_version += f"+{opencv_whl_name()}.{dtk_version_value()}"
 
     with open("cv2/version.py", "w") as f:
         f.write('opencv_version = "{}"\n'.format(opencv_version))

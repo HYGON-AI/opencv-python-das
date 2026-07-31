@@ -83,17 +83,17 @@ def main():
 
     package_name = "opencv-python"
 
-    if build_contrib and not build_headless:
-        package_name = "opencv-contrib-python"
+    # if build_contrib and not build_headless:
+    #     package_name = "opencv-contrib-python"
 
-    if build_contrib and build_headless:
-        package_name = "opencv-contrib-python-headless"
+    # if build_contrib and build_headless:
+    #     package_name = "opencv-contrib-python-headless"
 
-    if build_headless and not build_contrib:
-        package_name = "opencv-python-headless"
+    # if build_headless and not build_contrib:
+    #     package_name = "opencv-python-headless"
 
-    if build_rolling:
-        package_name += "-rolling"
+    # if build_rolling:
+    #     package_name += "-rolling"
 
     long_description = io.open("README.md", encoding="utf-8").read()
 
@@ -183,13 +183,25 @@ def main():
             "-DINSTALL_CREATE_DISTRIB=ON",
             # See opencv/CMakeLists.txt for options and defaults
             "-DBUILD_opencv_apps=OFF",
-            "-DBUILD_opencv_freetype=OFF",
-            "-DBUILD_SHARED_LIBS=OFF",
-            "-DBUILD_TESTS=OFF",
+            "-DBUILD_opencv_freetype=ON",
+            "-DBUILD_SHARED_LIBS=ON",
+            "-DBUILD_TESTS=ON",
             "-DBUILD_PERF_TESTS=OFF",
             "-DBUILD_DOCS=OFF",
             "-DPYTHON3_LIMITED_API=ON",
             "-DBUILD_OPENEXR=ON",
+            "-DBUILD_opencv_ovis=OFF",
+            "-DWITH_CUDA=ON",
+            "-DWITH_CUDNN=ON",
+            "-DWITH_CUBLAS=ON",
+            "-DWITH_CUFFT=ON",
+            "-DWITH_NVCUVID=ON",
+            "-DWITH_NVCUVENC=OFF",
+            "-DENABLE_CUDA_FIRST_CLASS_LANGUAGE=ON",
+            "-DCUDA_ARCH_BIN=6.0 7.0 7.5 8.0 8.6 9.0",
+            "-DBUILD_opencv_world=OFF",
+            "-DBUILD_opencv_cudaoptflow=OFF",
+            "-DOPENCV_DNN_CUDA=ON",
         ]
         + (
             # CMake flags for windows/arm64 build
