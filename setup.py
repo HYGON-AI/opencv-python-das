@@ -1,3 +1,6 @@
+# Copyright (C) 2026 Hygon Information Technology Co., Ltd.
+# SPDX-License-Identifier: MIT
+
 import io
 import os
 import os.path

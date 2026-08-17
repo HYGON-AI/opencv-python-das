@@ -1,11 +1,19 @@
 [![Downloads](https://static.pepy.tech/badge/opencv-python)](http://pepy.tech/project/opencv-python)
 
-**This is a HCU-adapted fork of [opencv-python](https://github.com/opencv/opencv-python).**
+### Open Source Attribution
 
-- Modified by Hygon Information Technology Co., Ltd. for HCU platform support.
-- The upstream opencv-python project is maintained by the OpenCV team.
-- This fork is based on the 4.9.0 release.
-- Key modifications include HCU/HIP backend build support.
+This repository is based on [opencv-python](https://github.com/opencv/opencv-python)
+and contains Hygon-maintained changes for HCU/ROCm environments. `opencv-python`
+is derived from the upstream [opencv-python](https://github.com/opencv/opencv-python/tree/80)
+project.
+
+- Modified by Hygon Information Technology Co., Ltd., 2026.
+- Direct upstream: [opencv](https://github.com/opencv/opencv-python/tree/80)
+- Upstream branch: `4.x`
+- Upstream tag: `80`
+- Upstream baseline commit: `8ad8ec1bae8aad196b3e9117a4b2b47d58547d47`
+- License: MIT License
+- Third-party notices: see component license files of `LICENSE-3RD-PARTY.txt` and preserved third-party notices in the source tree
 
 ### Keep OpenCV Free
 

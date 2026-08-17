@@ -1,5 +1,6 @@
 #!/bin/bash
-# Copyright (c) 2026 Hygon Information Technology Co., Ltd.
+# Copyright (C) 2026 Hygon Information Technology Co., Ltd.
+# SPDX-License-Identifier: MIT
 
 # 获取当前工作空间路径
 WORK_SPACE=$(pwd)
