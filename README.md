@@ -13,7 +13,7 @@ project.
 - Upstream tag: `80`
 - Upstream baseline commit: `8ad8ec1bae8aad196b3e9117a4b2b47d58547d47`
 - License: MIT License
-- Third-party notices: see component license files of `LICENSE-3RD-PARTY.txt` and preserved third-party notices in the source tree
+- Third-party notices: see component license files of `LICENSE-3RD-PARTY.txt` and `THIRD_PARTY_NOTICES.md` as well as preserved third-party notices in the source tree
 
 ### Keep OpenCV Free
 
