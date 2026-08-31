@@ -1,9 +1,9 @@
 [submodule "opencv"]
 	path = opencv
-	url = https://github.com/opencv/opencv.git
+	url = https://github.com/HYGON-AI/opencv-das.git
 [submodule "opencv_contrib"]
 	path = opencv_contrib
-	url = https://github.com/opencv/opencv_contrib.git
+	url = https://github.com/HYGON-AI/opencv_contrib-das.git
 [submodule "multibuild"]
 	path = multibuild
 	url = https://github.com/multi-build/multibuild.git
