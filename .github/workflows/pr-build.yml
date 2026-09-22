@@ -4,7 +4,7 @@
 name: PR build
 
 on:
-  pull_request_target:
+  pull_request:
     branches:
       - 4.9.0
     types:
@@ -46,9 +46,7 @@ jobs:
       - name: Checkout source and submodules
         uses: actions/checkout@v4
         with:
-          # pull_request_target uses the target branch by default; build the
-          # proposed PR revision instead.
-          ref: ${{ github.event.pull_request.head.sha }}
+          token: ${{ secrets.SUBMODULES_READ_TOKEN }}
           submodules: recursive
           fetch-depth: 0
           persist-credentials: false
