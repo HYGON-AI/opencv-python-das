@@ -100,15 +100,7 @@ jobs:
 
       - name: Build wheel
         shell: bash
-        run: |
-          source /opt/dtk/env.sh
-          set -euo pipefail
-          export CI_BUILD=1
-          export ENABLE_CONTRIB=0
-          export ENABLE_HEADLESS=0
-          export ENABLE_ROLLING=0
-          python3 setup.py bdist_wheel --py-limited-api=cp37 -v
-          compgen -G 'dist/*.whl' >/dev/null
+        run: bash .github/scripts/build_wheel.sh
 
       - name: Repair manylinux wheel
         shell: bash
