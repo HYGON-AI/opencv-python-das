@@ -11,10 +11,10 @@ auth_header="$(
     tr -d '\r\n'
 )"
 
-git submodule sync --recursive
+git submodule sync -- opencv
 
 for ((attempt = 1; attempt <= max_attempts; attempt++)); do
-  echo "Initializing submodules (attempt ${attempt}/${max_attempts})"
+  echo "Initializing OpenCV source submodule (attempt ${attempt}/${max_attempts})"
 
   if git \
     -c http.version=HTTP/1.1 \
@@ -25,19 +25,20 @@ for ((attempt = 1; attempt <= max_attempts; attempt++)); do
     --force \
     --recursive \
     --depth 1 \
-    --jobs 1; then
+    --jobs 1 \
+    -- opencv; then
     unset auth_header
-    echo "Submodules initialized successfully"
+    echo "OpenCV source submodule initialized successfully"
     exit 0
   fi
 
   if ((attempt == max_attempts)); then
     unset auth_header
-    echo "Failed to initialize submodules after ${max_attempts} attempts" >&2
+    echo "Failed to initialize OpenCV source submodule after ${max_attempts} attempts" >&2
     exit 1
   fi
 
   retry_delay=$((attempt * 15))
-  echo "Submodule checkout failed; retrying in ${retry_delay}s" >&2
+  echo "OpenCV source checkout failed; retrying in ${retry_delay}s" >&2
   sleep "${retry_delay}"
 done
