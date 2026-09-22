@@ -36,7 +36,7 @@ echo "CUDA toolkit:  ${cuda_root}"
 "${nvcc_path}" --version
 
 export CI_BUILD=1
-export ENABLE_CONTRIB=0
+export ENABLE_CONTRIB=1
 export ENABLE_HEADLESS=0
 export ENABLE_ROLLING=0
 
