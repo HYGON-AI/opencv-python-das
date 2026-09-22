@@ -41,11 +41,19 @@ jobs:
         --privileged=true
 
     steps:
-      - name: Checkout source and submodules
+      - name: Checkout source
         uses: actions/checkout@v4
         with:
-          submodules: recursive
+          token: ${{ secrets.SUBMODULES_READ_TOKEN }}
+          submodules: false
           fetch-depth: 0
+          persist-credentials: false
+
+      - name: Checkout submodules
+        shell: bash
+        env:
+          SUBMODULES_READ_TOKEN: ${{ secrets.SUBMODULES_READ_TOKEN }}
+        run: bash .github/scripts/checkout_submodules.sh
 
       - name: Configure Python package index
         shell: bash
