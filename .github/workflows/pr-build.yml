@@ -69,17 +69,7 @@ jobs:
 
       - name: Install DTK
         shell: bash
-        run: |
-          set -euo pipefail
-          cd /opt
-          test ! -e dtk
-          wget -q "${DTK_PKG_URL}"
-          archive_name="$(basename "${DTK_PKG_URL}")"
-          tar -xzf "${archive_name}"
-          extracted_dirs=(dtk-*)
-          test "${#extracted_dirs[@]}" -eq 1
-          test -d "${extracted_dirs[0]}"
-          mv "${extracted_dirs[0]}" dtk
+        run: bash .github/scripts/install_dtk.sh
 
       - name: Install AICC
         shell: bash
