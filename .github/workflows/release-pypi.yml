@@ -83,6 +83,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          bash .github/scripts/install_system_dependencies.sh
           python3 -m pip install --no-cache-dir \
             numpy==1.26.4 \
             cmake \
