@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: MIT
+# Copyright (C) 2026 Hygon Information Technology Co., Ltd.
 
 set -euo pipefail
 

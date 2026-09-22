@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: MIT
 # Copyright (C) 2026 Hygon Information Technology Co., Ltd.
+# SPDX-License-Identifier: MIT
+# Copyright (C) 2026 Hygon Information Technology Co., Ltd.
 
 # Repair Linux wheels without changing the original files.
 # Usage: .github/scripts/manylinux_repair.sh [input_dir=dist] [output_dir=dist-manylinux]

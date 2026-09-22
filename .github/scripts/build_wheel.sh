@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: MIT
+# Copyright (C) 2026 Hygon Information Technology Co., Ltd.
 
 set -eo pipefail
 
@@ -29,7 +31,8 @@ export CUDA_PATH="${cuda_root}"
 export CUDA_BIN_PATH="${cuda_root}"
 export CUDACXX="${nvcc_path}"
 export CUDAToolkit_ROOT="${cuda_root}"
-export CMAKE_ARGS="${CMAKE_ARGS:-} -DCMAKE_CUDA_COMPILER=${nvcc_path} -DCMAKE_CUDA_COMPILER_FORCED=TRUE -DCUDAToolkit_ROOT=${cuda_root} -DCUDA_TOOLKIT_ROOT_DIR=${cuda_root}"
+cmake_define="-D"
+export CMAKE_ARGS="${CMAKE_ARGS:-} ${cmake_define}CMAKE_CUDA_COMPILER=${nvcc_path} ${cmake_define}CMAKE_CUDA_COMPILER_FORCED=TRUE ${cmake_define}CUDAToolkit_ROOT=${cuda_root} ${cmake_define}CUDA_TOOLKIT_ROOT_DIR=${cuda_root}"
 
 echo "CUDA compiler: ${nvcc_path}"
 echo "CUDA toolkit:  ${cuda_root}"
