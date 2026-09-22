@@ -79,6 +79,12 @@ jobs:
           test -d "${extracted_dirs[0]}"
           mv "${extracted_dirs[0]}" dtk
 
+      - name: Install AICC
+        shell: bash
+        env:
+          RESOURCE_SERVER_URL: ${{ vars.RESOURCE_SERVER_URL }}
+        run: bash .github/scripts/install_aicc.sh
+
       - name: Install build dependencies
         shell: bash
         run: |
