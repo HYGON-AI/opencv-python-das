@@ -31,11 +31,17 @@ qt_plugins_dir="$("${qmake_bin}" -query QT_INSTALL_PLUGINS)"
 test -d "${qt_plugins_dir}"
 
 # setup.py applies patches/patchQtPlugins, which packages plugins from this
-# location. The upstream manylinux image provides a source-built Qt here;
-# expose Rocky Linux's packaged Qt plugins at the same stable path.
-mkdir -p /opt/Qt5.15.0
-if [[ ! -e /opt/Qt5.15.0/plugins ]]; then
-  ln -s "${qt_plugins_dir}" /opt/Qt5.15.0/plugins
+# location. CMake's install(DIRECTORY ...) does not traverse a directory
+# symlink, so copy the packaged Qt plugins instead of linking the directory.
+install -d /opt/Qt5.15.0/plugins
+cp -a "${qt_plugins_dir}/." /opt/Qt5.15.0/plugins/
+
+qt_xcb_plugin=/opt/Qt5.15.0/plugins/platforms/libqxcb.so
+if [[ ! -f "${qt_xcb_plugin}" ]]; then
+  echo "Required Qt platform plugin was not found: ${qt_xcb_plugin}" >&2
+  find /opt/Qt5.15.0/plugins -maxdepth 2 -type f -print >&2
+  exit 1
 fi
 
 echo "Qt5 plugins: ${qt_plugins_dir}"
+echo "Qt5 xcb plugin: ${qt_xcb_plugin}"
