@@ -26,7 +26,7 @@ env:
 jobs:
   build-wheel:
     name: Build manylinux wheel
-    runs-on: [self-hosted, hcu]
+    runs-on: self-hosted
     timeout-minutes: 240
     container:
       image: ${{ vars.BASE_COMPILE_IMAGE_ROCKY_PY310 }}
@@ -120,7 +120,7 @@ jobs:
     name: Publish NIGHTLY wheel
     if: github.event_name == 'push'
     needs: build-wheel
-    runs-on: [self-hosted, hcu]
+    runs-on: self-hosted
     timeout-minutes: 30
     container:
       image: ${{ vars.BASE_COMPILE_IMAGE_ROCKY_PY310 }}
