@@ -1,0 +1,120 @@
+# SPDX-License-Identifier: MIT
+# Copyright (C) 2026 Hygon Information Technology Co., Ltd.
+
+name: PR build
+
+on:
+  pull_request:
+    branches:
+      - 4.9.0
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - ready_for_review
+
+permissions:
+  contents: read
+
+concurrency:
+  group: opencv-python-das-pr-build-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+env:
+  DTK_PKG_URL: ${{ vars.RESOURCE_SERVER_URL }}/dtk-pkg/dtk26.04/DTK-26.04-rc4-centos8-x86_64.tar.gz
+  PYPI_URL: ${{ vars.PYPI_URL }}
+  MAX_JOBS: "32"
+
+jobs:
+  build-wheel:
+    name: Build manylinux wheel
+    runs-on: [self-hosted, hcu]
+    timeout-minutes: 240
+    container:
+      image: ${{ vars.BASE_COMPILE_IMAGE_ROCKY_PY310 }}
+      options: >-
+        --device=/dev/kfd
+        --device=/dev/dri/
+        --group-add video
+        -v /opt/hyhal/:/opt/hyhal/:ro
+        --shm-size=80G
+        --cap-add=SYS_PTRACE
+        --security-opt seccomp=unconfined
+        --privileged=true
+
+    steps:
+      - name: Checkout source and submodules
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Configure Python package index
+        shell: bash
+        run: |
+          set -euo pipefail
+          index_url="${PYPI_URL}/nightly/dtk2604/+simple/"
+          trusted_host="${index_url#*://}"
+          trusted_host="${trusted_host%%/*}"
+          echo "PIP_INDEX_URL=${index_url}" >> "${GITHUB_ENV}"
+          echo "PIP_TRUSTED_HOST=${trusted_host}" >> "${GITHUB_ENV}"
+
+      - name: Install DTK
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd /opt
+          test ! -e dtk
+          wget -q "${DTK_PKG_URL}"
+          archive_name="$(basename "${DTK_PKG_URL}")"
+          tar -xzf "${archive_name}"
+          extracted_dirs=(dtk-*)
+          test "${#extracted_dirs[@]}" -eq 1
+          test -d "${extracted_dirs[0]}"
+          mv "${extracted_dirs[0]}" dtk
+
+      - name: Install build dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m pip install --no-cache-dir \
+            numpy==1.26.4 \
+            cmake \
+            ninja \
+            wheel \
+            'scikit-build>=0.14.0' \
+            setuptools==59.2.0
+
+      - name: Build wheel
+        shell: bash
+        run: |
+          source /opt/dtk/env.sh
+          set -euo pipefail
+          export CI_BUILD=1
+          export ENABLE_CONTRIB=0
+          export ENABLE_HEADLESS=0
+          export ENABLE_ROLLING=0
+          python3 setup.py bdist_wheel --py-limited-api=cp37 -v
+          compgen -G 'dist/*.whl' >/dev/null
+
+      - name: Repair manylinux wheel
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash .github/scripts/manylinux_repair.sh dist dist-manylinux
+          mkdir -p wheelhouse
+          cp -v dist-manylinux/*.whl wheelhouse/
+          compgen -G 'wheelhouse/*.whl' >/dev/null
+          cd wheelhouse
+          sha256sum ./*.whl > SHA256SUMS
+
+      - name: Upload wheel artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: opencv-python-das-pr-${{ github.event.pull_request.number }}-${{ github.sha }}
+          path: |
+            wheelhouse/*.whl
+            wheelhouse/SHA256SUMS
+          if-no-files-found: error
+          retention-days: 7
