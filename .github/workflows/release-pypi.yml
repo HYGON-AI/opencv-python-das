@@ -59,6 +59,17 @@ jobs:
           : "${SUBMODULES_READ_TOKEN:?SUBMODULES_READ_TOKEN is required}"
           auth_header="$(printf 'x-access-token:%s' "${SUBMODULES_READ_TOKEN}" | base64 | tr -d '\r\n')"
           required_submodules=(opencv opencv_contrib)
+
+          # Self-hosted runners keep the workspace between jobs. A previously
+          # interrupted clone can leave a registered submodule without HEAD,
+          # which makes every subsequent update fail with "Needed a single
+          # revision". Remove only these generated checkout directories and
+          # their Git metadata before initializing the pinned revisions.
+          git submodule deinit --force -- "${required_submodules[@]}" || true
+          for submodule in "${required_submodules[@]}"; do
+            rm -rf -- "${submodule}" ".git/modules/${submodule}"
+          done
+
           git submodule sync -- "${required_submodules[@]}"
           for attempt in 1 2 3; do
             if git \
