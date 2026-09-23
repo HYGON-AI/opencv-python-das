@@ -5,6 +5,12 @@ name: Test existing wheel
 run-name: Test wheel artifact from run ${{ inputs.run_id }}
 
 on:
+  workflow_call:
+    inputs:
+      run_id:
+        description: GitHub Actions run ID containing the wheel artifact
+        required: true
+        type: string
   workflow_dispatch:
     inputs:
       run_id:

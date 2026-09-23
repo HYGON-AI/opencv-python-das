@@ -5,17 +5,38 @@ on:
     types: [opened, synchronize, reopened, ready_for_review]
     branches:
       - 4.9.0
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: GitHub Actions run ID containing the wheel artifact
+        required: true
+        type: string
 
 permissions:
+  actions: read
   contents: read
 
 concurrency:
-  group: hygon-pr-gate-${{ github.event.pull_request.number }}
+  group: >-
+    ${{ github.event_name == 'pull_request'
+      && format('hygon-pr-gate-{0}', github.event.pull_request.number)
+      || format('opencv-python-das-test-existing-{0}', inputs.run_id) }}
   cancel-in-progress: true
 
 jobs:
   gate:
+    if: github.event_name == 'pull_request'
     name: Checks
     uses: HYGON-AI/quality-gate/.github/workflows/pr-quality-gate.yml@v2.0.3
     permissions:
+      contents: read
+
+  test-existing-wheel:
+    if: github.event_name == 'workflow_dispatch'
+    name: Test existing wheel
+    uses: ./.github/workflows/test-existing-wheel.yml
+    with:
+      run_id: ${{ inputs.run_id }}
+    permissions:
+      actions: read
       contents: read
