@@ -46,7 +46,12 @@ python3 -m venv "${venv_dir}"
 source "${venv_dir}/bin/activate"
 python -m pip install --no-cache-dir --force-reinstall numpy==1.26.4 "${wheels[0]}"
 
-python - <<'PY'
+# Run import checks outside the repository. Python prepends the current
+# directory to sys.path, so executing from the repository root would import
+# the source tree's ./cv2 package instead of the installed repaired wheel.
+(
+  cd "${venv_dir}"
+  python - <<'PY'
 import pathlib
 import sys
 
@@ -58,6 +63,7 @@ if venv not in module.parents:
     raise RuntimeError(f"cv2 was not imported from the test venv: {module}")
 print(f"Testing cv2 from {module}")
 PY
+)
 
 (
   cd tests
@@ -68,7 +74,9 @@ PY
   python get_build_info.py
 )
 
-python - <<'PY'
+(
+  cd "${venv_dir}"
+  python - <<'PY'
 import re
 
 import cv2
@@ -89,3 +97,4 @@ np.testing.assert_array_equal(device.download(), source)
 
 print(f"OpenCV {cv2.__version__}: CUDA/HCU smoke test passed on {device_count} device(s)")
 PY
+)
