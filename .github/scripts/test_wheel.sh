@@ -35,10 +35,29 @@ cleanup() {
 }
 trap cleanup EXIT
 
+# The build image exports its global site-packages through PYTHONPATH. If it
+# leaks into the venv, pip sees build-time opencv-python metadata and skips
+# installing the repaired wheel even though cv2 is not importable there.
+unset PYTHONPATH
+export PYTHONNOUSERSITE=1
+
 python3 -m venv "${venv_dir}"
 # shellcheck disable=SC1090
 source "${venv_dir}/bin/activate"
-python -m pip install --no-cache-dir numpy==1.26.4 "${wheels[0]}"
+python -m pip install --no-cache-dir --force-reinstall numpy==1.26.4 "${wheels[0]}"
+
+python - <<'PY'
+import pathlib
+import sys
+
+import cv2
+
+venv = pathlib.Path(sys.prefix).resolve()
+module = pathlib.Path(cv2.__file__).resolve()
+if venv not in module.parents:
+    raise RuntimeError(f"cv2 was not imported from the test venv: {module}")
+print(f"Testing cv2 from {module}")
+PY
 
 (
   cd tests
