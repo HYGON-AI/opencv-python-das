@@ -4,6 +4,9 @@
 
 set -euo pipefail
 
+# DTK environment scripts append to variables that may not exist in a clean
+# runtime container, so disable nounset only while sourcing vendor scripts.
+set +u
 # shellcheck disable=SC1091
 source /opt/dtk/env.sh
 for cuda_env in /opt/dtk/cuda/env.sh /opt/dtk/cuda/cuda/env.sh; do
@@ -12,6 +15,7 @@ for cuda_env in /opt/dtk/cuda/env.sh /opt/dtk/cuda/cuda/env.sh; do
     source "${cuda_env}"
   fi
 done
+set -u
 
 wheel_dir="${1:-wheelhouse}"
 wheels=("${wheel_dir}"/*.whl)

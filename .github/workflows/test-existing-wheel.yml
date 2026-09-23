@@ -1,0 +1,75 @@
+# SPDX-License-Identifier: MIT
+# Copyright (C) 2026 Hygon Information Technology Co., Ltd.
+
+name: Test existing wheel
+run-name: Test wheel artifact from run ${{ inputs.run_id }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: GitHub Actions run ID containing the wheel artifact
+        required: true
+        type: string
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: opencv-python-das-test-existing-${{ inputs.run_id }}
+  cancel-in-progress: true
+
+env:
+  DTK_PKG_URL: ${{ vars.RESOURCE_SERVER_URL }}/dtk-pkg/dtk26.04/DTK-26.04-rc4-centos8-x86_64.tar.gz
+  PYPI_URL: ${{ vars.PYPI_URL }}
+
+jobs:
+  test-wheel:
+    name: Test existing wheel
+    runs-on: self-hosted
+    timeout-minutes: 30
+    container:
+      image: ${{ vars.BASE_COMPILE_IMAGE_ROCKY_PY310 }}
+      options: >-
+        --device=/dev/kfd
+        --device=/dev/dri/
+        --group-add video
+        -v /opt/hyhal/:/opt/hyhal/:ro
+        --shm-size=8G
+        --privileged=true
+
+    steps:
+      - name: Checkout tests
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+
+      - name: Download wheel artifact
+        uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ inputs.run_id }}
+          pattern: opencv-python-das-*
+          merge-multiple: true
+          path: wheelhouse
+
+      - name: Configure Python package index
+        shell: bash
+        run: |
+          set -euo pipefail
+          index_url="${PYPI_URL}/nightly/dtk2604/+simple/"
+          trusted_host="${index_url#*://}"
+          trusted_host="${trusted_host%%/*}"
+          echo "PIP_INDEX_URL=${index_url}" >> "${GITHUB_ENV}"
+          echo "PIP_TRUSTED_HOST=${trusted_host}" >> "${GITHUB_ENV}"
+
+      - name: Install runtime dependencies
+        shell: bash
+        run: bash .github/scripts/install_dependencies.sh runtime
+
+      - name: Test installed wheel
+        shell: bash
+        run: bash .github/scripts/test_wheel.sh wheelhouse
