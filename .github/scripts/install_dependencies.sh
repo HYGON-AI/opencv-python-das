@@ -9,6 +9,7 @@ set -euo pipefail
 dtk_archive="$(mktemp --tmpdir=/opt DTK-package.XXXXXX.tar.gz)"
 aicc_installer=""
 gst_registry=""
+mpg123_build_dir=""
 
 cleanup() {
   rm -f "${dtk_archive}"
@@ -17,6 +18,9 @@ cleanup() {
   fi
   if [[ -n "${gst_registry}" ]]; then
     rm -f "${gst_registry}"
+  fi
+  if [[ -n "${mpg123_build_dir}" ]]; then
+    rm -rf "${mpg123_build_dir}"
   fi
 }
 trap cleanup EXIT
@@ -84,11 +88,45 @@ install_system_dependencies() {
     "https://mirrors.rpmfusion.org/free/el/rpmfusion-free-release-${rhel_major}.noarch.rpm"
   "${package_manager}" install -y gstreamer1-libav
 
+  # EPEL's current libopenmpt calls mpg123_param2, while Rocky 8 ships the
+  # older mpg123 1.25 ABI without that symbol. Install a pinned compatible
+  # libmpg123 in /usr/local and expose it to this and subsequent Actions steps.
+  local mpg123_archive mpg123_source
+  mpg123_build_dir="$(mktemp -d)"
+  mpg123_archive="${mpg123_build_dir}/mpg123-1.32.10.tar.bz2"
+  wget \
+    --quiet \
+    --tries=3 \
+    --timeout=30 \
+    --output-document="${mpg123_archive}" \
+    "https://sourceforge.net/projects/mpg123/files/mpg123/1.32.10/mpg123-1.32.10.tar.bz2/download"
+  echo "87b2c17fe0c979d3ef38eeceff6362b35b28ac8589fbf1854b5be75c9ab6557c  ${mpg123_archive}" | sha256sum -c -
+  tar -xjf "${mpg123_archive}" -C "${mpg123_build_dir}"
+  mpg123_source="${mpg123_build_dir}/mpg123-1.32.10"
+  (
+    cd "${mpg123_source}"
+    ./configure \
+      --prefix=/usr/local \
+      --libdir=/usr/local/lib64 \
+      --disable-static \
+      --enable-shared
+    make -j "${MAX_JOBS:-4}"
+    make install
+  )
+  export LD_LIBRARY_PATH="/usr/local/lib64${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
+  if [[ -n "${GITHUB_ENV:-}" ]]; then
+    echo "LD_LIBRARY_PATH=${LD_LIBRARY_PATH}" >> "${GITHUB_ENV}"
+  fi
+  test -n "$(nm -D /usr/local/lib64/libmpg123.so.0 | grep ' mpg123_param2$')"
+
   # Package scriptlets can leave a registry that predates the newly installed
   # libav plugin. Scan into a fresh job-local registry.
   gst_registry="$(mktemp)"
   rm -f "${gst_registry}"
   export GST_REGISTRY_1_0="${gst_registry}"
+  if [[ -n "${GITHUB_ENV:-}" ]]; then
+    echo "GST_REGISTRY_1_0=${GST_REGISTRY_1_0}" >> "${GITHUB_ENV}"
+  fi
 
   if gst-inspect-1.0 avdec_h264 >/dev/null 2>&1; then
     echo "GStreamer H.264 decoder: avdec_h264"
