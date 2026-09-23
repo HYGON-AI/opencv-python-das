@@ -10,6 +10,7 @@ on:
   workflow_dispatch:
 
 permissions:
+  actions: read
   contents: read
   pull-requests: read
   checks: read
@@ -139,10 +140,14 @@ jobs:
           persist-credentials: false
 
       - name: Download wheel artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: opencv-python-das-${{ github.sha }}
-          path: wheelhouse
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: >-
+          bash .github/scripts/download_artifact.sh
+          "${GITHUB_RUN_ID}"
+          "opencv-python-das-${{ github.sha }}"
+          wheelhouse
 
       - name: Configure Python package index
         shell: bash
@@ -174,11 +179,21 @@ jobs:
       image: ${{ vars.BASE_COMPILE_IMAGE_ROCKY_PY310 }}
 
     steps:
-      - name: Download wheel artifact
-        uses: actions/download-artifact@v4
+      - name: Checkout upload scripts
+        uses: actions/checkout@v4
         with:
-          name: opencv-python-das-${{ github.sha }}
-          path: wheelhouse
+          submodules: false
+          persist-credentials: false
+
+      - name: Download wheel artifact
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: >-
+          bash .github/scripts/download_artifact.sh
+          "${GITHUB_RUN_ID}"
+          "opencv-python-das-${{ github.sha }}"
+          wheelhouse
 
       - name: Configure Python package index
         shell: bash

@@ -14,6 +14,7 @@ on:
       - ready_for_review
 
 permissions:
+  actions: read
   contents: read
 
 concurrency:
@@ -141,10 +142,14 @@ jobs:
           persist-credentials: false
 
       - name: Download wheel artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: opencv-python-das-pr-${{ github.event.pull_request.number }}-${{ github.sha }}
-          path: wheelhouse
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: >-
+          bash .github/scripts/download_artifact.sh
+          "${GITHUB_RUN_ID}"
+          "opencv-python-das-pr-${{ github.event.pull_request.number }}-${{ github.sha }}"
+          wheelhouse
 
       - name: Configure Python package index
         shell: bash

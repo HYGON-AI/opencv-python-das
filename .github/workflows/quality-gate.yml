@@ -57,14 +57,14 @@ jobs:
           persist-credentials: false
 
       - name: Download wheel artifact
-        uses: actions/download-artifact@v4
-        with:
-          github-token: ${{ github.token }}
-          repository: ${{ github.repository }}
-          run-id: ${{ inputs.run_id }}
-          pattern: opencv-python-das-*
-          merge-multiple: true
-          path: wheelhouse
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: >-
+          bash .github/scripts/download_artifact.sh
+          "${{ inputs.run_id }}"
+          "opencv-python-das-*"
+          wheelhouse
 
       - name: Configure Python package index
         shell: bash
