@@ -67,6 +67,10 @@ PY
 
 (
   cd tests
+  # The build image has the GStreamer framework but not the codec plugin used
+  # by the MP4 fixture. Let VideoCapture exercise the wheel's FFmpeg backend
+  # instead of failing in GStreamer's incomplete plugin installation.
+  export OPENCV_VIDEOIO_PRIORITY_GSTREAMER=0
   # A broken multimedia dependency can block VideoCapture during plugin
   # discovery. Fail with a useful exit status instead of occupying a runner
   # until the job-level timeout expires.
