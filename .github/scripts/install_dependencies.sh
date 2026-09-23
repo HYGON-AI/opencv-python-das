@@ -65,7 +65,36 @@ install_system_dependencies() {
 
   "${package_manager}" install -y \
     dejavu-sans-fonts \
+    gstreamer1-plugins-bad-free \
+    gstreamer1-plugins-good \
+    gstreamer1-tools \
     qt5-qtbase-devel
+
+  # The repository's video fixture is H.264 (avc1). Rocky's base GStreamer
+  # installation can discover the MP4 container without providing an H.264
+  # decoder, so try the decoder packages exposed by the configured repos.
+  # Verify this before the two-hour OpenCV build instead of failing at test.
+  local codec_package
+  for codec_package in \
+    gstreamer1-plugin-openh264 \
+    gstreamer1-plugins-ugly-free \
+    gstreamer1-libav; do
+    if "${package_manager}" install -y "${codec_package}"; then
+      echo "Installed optional GStreamer codec package: ${codec_package}"
+    else
+      echo "GStreamer codec package is unavailable: ${codec_package}"
+    fi
+  done
+
+  if gst-inspect-1.0 avdec_h264 >/dev/null 2>&1; then
+    echo "GStreamer H.264 decoder: avdec_h264"
+  elif gst-inspect-1.0 openh264dec >/dev/null 2>&1; then
+    echo "GStreamer H.264 decoder: openh264dec"
+  else
+    echo "No GStreamer H.264 decoder is available from the configured repositories" >&2
+    gst-inspect-1.0 | grep -Ei 'h264|openh264|libav' >&2 || true
+    return 1
+  fi
 
   local qmake_bin
   qmake_bin="$(command -v qmake-qt5 || command -v qmake || true)"
