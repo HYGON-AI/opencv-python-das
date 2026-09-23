@@ -8,11 +8,15 @@ set -euo pipefail
 
 dtk_archive="$(mktemp --tmpdir=/opt DTK-package.XXXXXX.tar.gz)"
 aicc_installer=""
+gst_registry=""
 
 cleanup() {
   rm -f "${dtk_archive}"
   if [[ -n "${aicc_installer}" ]]; then
     rm -f "${aicc_installer}"
+  fi
+  if [[ -n "${gst_registry}" ]]; then
+    rm -f "${gst_registry}"
   fi
 }
 trap cleanup EXIT
@@ -73,15 +77,18 @@ install_system_dependencies() {
   # provide the MP4 demuxer and H.264 parser, but intentionally omit a decoder.
   # RPM Fusion's signed EL package supplies avdec_h264 through gstreamer1-libav.
   # Verify this before the two-hour OpenCV build instead of failing at test.
-  if ! gst-inspect-1.0 avdec_h264 >/dev/null 2>&1 && \
-     ! gst-inspect-1.0 openh264dec >/dev/null 2>&1; then
-    local rhel_major
-    rhel_major="$(rpm -E '%{rhel}')"
-    "${package_manager}" install -y epel-release
-    "${package_manager}" install -y \
-      "https://mirrors.rpmfusion.org/free/el/rpmfusion-free-release-${rhel_major}.noarch.rpm"
-    "${package_manager}" install -y gstreamer1-libav
-  fi
+  local rhel_major
+  rhel_major="$(rpm -E '%{rhel}')"
+  "${package_manager}" install -y epel-release
+  "${package_manager}" install -y \
+    "https://mirrors.rpmfusion.org/free/el/rpmfusion-free-release-${rhel_major}.noarch.rpm"
+  "${package_manager}" install -y gstreamer1-libav
+
+  # Package scriptlets can leave a registry that predates the newly installed
+  # libav plugin. Scan into a fresh job-local registry.
+  gst_registry="$(mktemp)"
+  rm -f "${gst_registry}"
+  export GST_REGISTRY_1_0="${gst_registry}"
 
   if gst-inspect-1.0 avdec_h264 >/dev/null 2>&1; then
     echo "GStreamer H.264 decoder: avdec_h264"
@@ -89,6 +96,12 @@ install_system_dependencies() {
     echo "GStreamer H.264 decoder: openh264dec"
   else
     echo "No GStreamer H.264 decoder is available from the configured repositories" >&2
+    local libav_plugin
+    libav_plugin="$(find /usr/lib64 /usr/lib -path '*/gstreamer-1.0/libgstlibav.so' -print -quit 2>/dev/null || true)"
+    if [[ -n "${libav_plugin}" ]]; then
+      ldd "${libav_plugin}" >&2 || true
+      GST_DEBUG=2 gst-inspect-1.0 "${libav_plugin}" >&2 || true
+    fi
     gst-inspect-1.0 | grep -Ei 'h264|openh264|libav' >&2 || true
     return 1
   fi
