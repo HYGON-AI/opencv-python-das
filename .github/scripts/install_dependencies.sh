@@ -5,7 +5,6 @@
 set -euo pipefail
 
 : "${DTK_PKG_URL:?DTK_PKG_URL is required}"
-: "${RESOURCE_SERVER_URL:?RESOURCE_SERVER_URL is required}"
 
 dtk_archive="$(mktemp --tmpdir=/opt DTK-package.XXXXXX.tar.gz)"
 aicc_installer=""
@@ -40,6 +39,7 @@ install_dtk() {
 }
 
 install_aicc() {
+  : "${RESOURCE_SERVER_URL:?RESOURCE_SERVER_URL is required}"
   aicc_installer="$(mktemp)"
 
   wget \
@@ -108,7 +108,19 @@ install_python_dependencies() {
     setuptools==59.2.0
 }
 
-install_dtk
-install_aicc
-install_system_dependencies
-install_python_dependencies
+case "${1:-build}" in
+  build)
+    install_dtk
+    install_aicc
+    install_system_dependencies
+    install_python_dependencies
+    ;;
+  runtime)
+    install_dtk
+    install_system_dependencies
+    ;;
+  *)
+    echo "Usage: $0 [build|runtime]" >&2
+    exit 2
+    ;;
+esac
