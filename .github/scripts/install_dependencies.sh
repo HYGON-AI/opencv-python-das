@@ -67,7 +67,6 @@ install_system_dependencies() {
     dejavu-sans-fonts \
     gstreamer1-plugins-bad-free \
     gstreamer1-plugins-good \
-    gstreamer1-tools \
     qt5-qtbase-devel
 
   # The repository's video fixture is H.264 (avc1). Rocky's base GStreamer
