@@ -26,7 +26,7 @@ env:
 
 jobs:
   build-wheel:
-    name: Build manylinux wheel
+    name: Build, test and publish manylinux wheel
     runs-on: self-hosted
     timeout-minutes: 240
     container:
@@ -107,6 +107,10 @@ jobs:
           cd wheelhouse
           sha256sum ./*.whl > SHA256SUMS
 
+      - name: Test repaired wheel
+        shell: bash
+        run: bash .github/scripts/test_wheel.sh wheelhouse
+
       - name: Upload wheel artifact
         uses: actions/upload-artifact@v4
         with:
@@ -117,95 +121,8 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
-  test-wheel:
-    name: Test wheel
-    needs: build-wheel
-    runs-on: self-hosted
-    timeout-minutes: 90
-    container:
-      image: ${{ vars.BASE_COMPILE_IMAGE_ROCKY_PY310 }}
-      options: >-
-        --device=/dev/kfd
-        --device=/dev/dri/
-        --group-add video
-        -v /opt/hyhal/:/opt/hyhal/:ro
-        --shm-size=8G
-        --privileged=true
-
-    steps:
-      - name: Checkout tests
-        uses: actions/checkout@v4
-        with:
-          submodules: false
-          persist-credentials: false
-
-      - name: Download wheel artifact
-        shell: bash
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-        run: >-
-          bash .github/scripts/download_artifact.sh
-          "${GITHUB_RUN_ID}"
-          "opencv-python-das-${{ github.sha }}"
-          wheelhouse
-
-      - name: Configure Python package index
-        shell: bash
-        run: |
-          set -euo pipefail
-          index_url="${PYPI_URL}/nightly/dtk2604/+simple/"
-          trusted_host="${index_url#*://}"
-          trusted_host="${trusted_host%%/*}"
-          echo "PIP_INDEX_URL=${index_url}" >> "${GITHUB_ENV}"
-          echo "PIP_TRUSTED_HOST=${trusted_host}" >> "${GITHUB_ENV}"
-
-      - name: Install runtime dependencies
-        shell: bash
-        run: bash .github/scripts/install_dependencies.sh runtime
-
-      - name: Test installed wheel
-        shell: bash
-        run: bash .github/scripts/test_wheel.sh wheelhouse
-
-  publish-nightly:
-    name: Publish NIGHTLY wheel
-    if: github.event_name == 'push'
-    needs:
-      - build-wheel
-      - test-wheel
-    runs-on: self-hosted
-    timeout-minutes: 90
-    container:
-      image: ${{ vars.BASE_COMPILE_IMAGE_ROCKY_PY310 }}
-
-    steps:
-      - name: Checkout upload scripts
-        uses: actions/checkout@v4
-        with:
-          submodules: false
-          persist-credentials: false
-
-      - name: Download wheel artifact
-        shell: bash
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-        run: >-
-          bash .github/scripts/download_artifact.sh
-          "${GITHUB_RUN_ID}"
-          "opencv-python-das-${{ github.sha }}"
-          wheelhouse
-
-      - name: Configure Python package index
-        shell: bash
-        run: |
-          set -euo pipefail
-          index_url="${PYPI_URL}/nightly/dtk2604/+simple/"
-          trusted_host="${index_url#*://}"
-          trusted_host="${trusted_host%%/*}"
-          echo "PIP_INDEX_URL=${index_url}" >> "${GITHUB_ENV}"
-          echo "PIP_TRUSTED_HOST=${trusted_host}" >> "${GITHUB_ENV}"
-
       - name: Verify wheel artifact
+        if: github.event_name == 'push'
         shell: bash
         run: |
           set -euo pipefail
@@ -213,6 +130,7 @@ jobs:
           sha256sum -c SHA256SUMS
 
       - name: Publish to NIGHTLY index
+        if: github.event_name == 'push'
         shell: bash
         env:
           GITHUB_TOKEN: ${{ github.token }}

@@ -65,6 +65,18 @@ excludes=(
     libswscale.so.8
     libswresample.so.5
     libmacv4l2.so.1
+    # GStreamer discovers plugins from the host at runtime. Bundling its core
+    # libraries while loading host plugins brings two GStreamer runtimes into
+    # one process and causes duplicate GstObject/GstChildProxy registration.
+    # Keep the complete GStreamer stack supplied by the target system.
+    libgstreamer-1.0.so.0
+    libgstapp-1.0.so.0
+    libgstaudio-1.0.so.0
+    libgstbase-1.0.so.0
+    libgstpbutils-1.0.so.0
+    libgstriff-1.0.so.0
+    libgsttag-1.0.so.0
+    libgstvideo-1.0.so.0
     libunwind.so.8
     libomp.so
     libhipsparse.so.0

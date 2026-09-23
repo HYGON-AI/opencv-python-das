@@ -5,81 +5,17 @@ on:
     types: [opened, synchronize, reopened, ready_for_review]
     branches:
       - 4.9.0
-  workflow_dispatch:
-    inputs:
-      run_id:
-        description: GitHub Actions run ID containing the wheel artifact
-        required: true
-        type: string
 
 permissions:
-  actions: read
   contents: read
 
 concurrency:
-  group: >-
-    ${{ github.event_name == 'pull_request'
-      && format('hygon-pr-gate-{0}', github.event.pull_request.number)
-      || format('opencv-python-das-test-existing-{0}', inputs.run_id) }}
+  group: hygon-pr-gate-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 
 jobs:
   gate:
-    if: github.event_name == 'pull_request'
     name: Checks
     uses: HYGON-AI/quality-gate/.github/workflows/pr-quality-gate.yml@v2.0.3
     permissions:
       contents: read
-
-  test-existing-wheel:
-    if: github.event_name == 'workflow_dispatch'
-    name: Test existing wheel
-    runs-on: self-hosted
-    timeout-minutes: 90
-    container:
-      image: ${{ vars.BASE_COMPILE_IMAGE_ROCKY_PY310 }}
-      options: >-
-        --device=/dev/kfd
-        --device=/dev/dri/
-        --group-add video
-        -v /opt/hyhal/:/opt/hyhal/:ro
-        --shm-size=8G
-        --privileged=true
-    env:
-      DTK_PKG_URL: ${{ vars.RESOURCE_SERVER_URL }}/dtk-pkg/dtk26.04/DTK-26.04-rc4-centos8-x86_64.tar.gz
-      PYPI_URL: ${{ vars.PYPI_URL }}
-
-    steps:
-      - name: Checkout tests
-        uses: actions/checkout@v4
-        with:
-          submodules: false
-          persist-credentials: false
-
-      - name: Download wheel artifact
-        shell: bash
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-        run: >-
-          bash .github/scripts/download_artifact.sh
-          "${{ inputs.run_id }}"
-          "opencv-python-das-*"
-          wheelhouse
-
-      - name: Configure Python package index
-        shell: bash
-        run: |
-          set -euo pipefail
-          index_url="${PYPI_URL}/nightly/dtk2604/+simple/"
-          trusted_host="${index_url#*://}"
-          trusted_host="${trusted_host%%/*}"
-          echo "PIP_INDEX_URL=${index_url}" >> "${GITHUB_ENV}"
-          echo "PIP_TRUSTED_HOST=${trusted_host}" >> "${GITHUB_ENV}"
-
-      - name: Install runtime dependencies
-        shell: bash
-        run: bash .github/scripts/install_dependencies.sh runtime
-
-      - name: Test installed wheel
-        shell: bash
-        run: bash .github/scripts/test_wheel.sh wheelhouse

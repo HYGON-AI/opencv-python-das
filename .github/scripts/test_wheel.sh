@@ -42,7 +42,10 @@ python -m pip install --no-cache-dir numpy==1.26.4 "${wheels[0]}"
 
 (
   cd tests
-  python -m unittest -v test.py
+  # A broken multimedia dependency can block VideoCapture during plugin
+  # discovery. Fail with a useful exit status instead of occupying a runner
+  # until the job-level timeout expires.
+  timeout --signal=TERM --kill-after=15s 120s python -m unittest -v test.py
   python get_build_info.py
 )
 
