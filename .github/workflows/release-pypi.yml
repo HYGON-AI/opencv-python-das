@@ -121,7 +121,7 @@ jobs:
     name: Test wheel
     needs: build-wheel
     runs-on: self-hosted
-    timeout-minutes: 30
+    timeout-minutes: 90
     container:
       image: ${{ vars.BASE_COMPILE_IMAGE_ROCKY_PY310 }}
       options: >-
@@ -174,7 +174,7 @@ jobs:
       - build-wheel
       - test-wheel
     runs-on: self-hosted
-    timeout-minutes: 30
+    timeout-minutes: 90
     container:
       image: ${{ vars.BASE_COMPILE_IMAGE_ROCKY_PY310 }}
 

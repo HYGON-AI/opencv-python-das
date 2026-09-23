@@ -65,7 +65,8 @@ curl \
   --retry 5 \
   --retry-delay 5 \
   --connect-timeout 30 \
-  --max-time 900 \
+  --max-time 3600 \
+  --continue-at - \
   --header "Authorization: Bearer ${GITHUB_TOKEN}" \
   --header "Accept: application/vnd.github+json" \
   --output "${archive_file}" \
