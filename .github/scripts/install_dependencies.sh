@@ -69,21 +69,19 @@ install_system_dependencies() {
     gstreamer1-plugins-good \
     qt5-qtbase-devel
 
-  # The repository's video fixture is H.264 (avc1). Rocky's base GStreamer
-  # installation can discover the MP4 container without providing an H.264
-  # decoder, so try the decoder packages exposed by the configured repos.
+  # The repository's video fixture is H.264 (avc1). Rocky's base repositories
+  # provide the MP4 demuxer and H.264 parser, but intentionally omit a decoder.
+  # RPM Fusion's signed EL package supplies avdec_h264 through gstreamer1-libav.
   # Verify this before the two-hour OpenCV build instead of failing at test.
-  local codec_package
-  for codec_package in \
-    gstreamer1-plugin-openh264 \
-    gstreamer1-plugins-ugly-free \
-    gstreamer1-libav; do
-    if "${package_manager}" install -y "${codec_package}"; then
-      echo "Installed optional GStreamer codec package: ${codec_package}"
-    else
-      echo "GStreamer codec package is unavailable: ${codec_package}"
-    fi
-  done
+  if ! gst-inspect-1.0 avdec_h264 >/dev/null 2>&1 && \
+     ! gst-inspect-1.0 openh264dec >/dev/null 2>&1; then
+    local rhel_major
+    rhel_major="$(rpm -E '%{rhel}')"
+    "${package_manager}" install -y epel-release
+    "${package_manager}" install -y \
+      "https://mirrors.rpmfusion.org/free/el/rpmfusion-free-release-${rhel_major}.noarch.rpm"
+    "${package_manager}" install -y gstreamer1-libav
+  fi
 
   if gst-inspect-1.0 avdec_h264 >/dev/null 2>&1; then
     echo "GStreamer H.264 decoder: avdec_h264"
