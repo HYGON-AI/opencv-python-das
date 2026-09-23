@@ -32,6 +32,7 @@ cleanup() {
 trap cleanup EXIT
 
 python3 -m venv "${venv_dir}"
+# shellcheck disable=SC1090
 source "${venv_dir}/bin/activate"
 python -m pip install --no-cache-dir numpy==1.26.4 "${wheels[0]}"
 
