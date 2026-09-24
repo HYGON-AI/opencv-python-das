@@ -12,13 +12,23 @@ on:
       - synchronize
       - reopened
       - ready_for_review
+  workflow_call:
+    inputs:
+      opencv_ref:
+        description: "opencv-das commit or ref to validate in the wheel build"
+        required: true
+        type: string
+      wrapper_ref:
+        description: "opencv-python-das ref containing the build scripts"
+        required: true
+        type: string
 
 permissions:
   actions: read
   contents: read
 
 concurrency:
-  group: opencv-python-das-pr-build-${{ github.event.pull_request.number }}
+  group: opencv-python-das-pr-build-${{ github.event.pull_request.number || github.run_id }}
   cancel-in-progress: true
 
 env:
@@ -47,6 +57,8 @@ jobs:
       - name: Checkout source
         uses: actions/checkout@v4
         with:
+          repository: HYGON-AI/opencv-python-das
+          ref: ${{ inputs.wrapper_ref || github.sha }}
           token: ${{ secrets.SUBMODULES_READ_TOKEN }}
           submodules: false
           fetch-depth: 0
@@ -55,6 +67,7 @@ jobs:
       - name: Checkout submodules
         shell: bash
         env:
+          OPENCV_REF: ${{ inputs.opencv_ref }}
           SUBMODULES_READ_TOKEN: ${{ secrets.SUBMODULES_READ_TOKEN }}
         run: |
           set -euo pipefail
@@ -80,7 +93,7 @@ jobs:
               -c "http.https://github.com/.extraheader=AUTHORIZATION: basic ${auth_header}" \
               submodule update --init --force --recursive --depth 1 --jobs 1 -- \
               "${required_submodules[@]}"; then
-              exit 0
+              break
             fi
             if [[ "${attempt}" == 3 ]]; then
               echo "Failed to initialize required OpenCV submodules" >&2
@@ -88,6 +101,12 @@ jobs:
             fi
             sleep "$((attempt * 15))"
           done
+
+          if [[ -n "${OPENCV_REF}" ]]; then
+            git -C opencv fetch --no-tags --depth 1 origin "${OPENCV_REF}"
+            git -C opencv checkout --detach FETCH_HEAD
+            echo "Validating opencv-das revision $(git -C opencv rev-parse HEAD)"
+          fi
 
       - name: Configure Python package index
         shell: bash
