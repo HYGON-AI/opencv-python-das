@@ -17,6 +17,8 @@ for cuda_env in /opt/dtk/cuda/env.sh /opt/dtk/cuda/cuda/env.sh; do
 done
 set -u
 
+export OPENCV_TEST_DATA_PATH="${GITHUB_WORKSPACE}/opencv_extra/testdata"
+
 wheel_dir="${1:-wheelhouse}"
 wheels=("${wheel_dir}"/*.whl)
 if [[ "${#wheels[@]}" -ne 1 || ! -f "${wheels[0]}" ]]; then
@@ -64,6 +66,33 @@ if venv not in module.parents:
 print(f"Testing cv2 from {module}")
 PY
 )
+
+# setup.py keeps the CMake test binaries in _skbuild. Run the CUDA module
+# smoke tests against the same build that produced the wheel, using the
+# checked-out OpenCV 4.9.0 test data. The HCU runtime currently does not
+# support CUDA Event handles; exclude only that known incompatible test group.
+build_bin="$(find "${GITHUB_WORKSPACE}" -type f \
+  -path '*/_skbuild/*/cmake-build/bin/opencv_test_cudaarithm' \
+  -print -quit)"
+if [[ -z "${build_bin}" ]]; then
+  echo 'Could not locate the _skbuild CUDA test binaries' >&2
+  find "${GITHUB_WORKSPACE}" -path '*/cmake-build/bin/opencv_test_*' -type f -print >&2
+  exit 1
+fi
+build_bin_dir="$(dirname "${build_bin}")"
+export GTEST_FILTER='-CUDA_Event/AsyncEvent.*'
+for test_name in \
+  cudaarithm cudaimgproc cudafilters cudaobjdetect cudawarping \
+  cudalegacy cudafeatures2d cudev; do
+  test_binary="${build_bin_dir}/opencv_test_${test_name}"
+  [[ -x "${test_binary}" ]] || {
+    echo "Missing CUDA test binary: ${test_binary}" >&2
+    exit 1
+  }
+  echo "Running ${test_binary} --cuda_device 0"
+  timeout --signal=TERM --kill-after=30s 900s \
+    "${test_binary}" --cuda_device 0
+done
 
 (
   cd tests
