@@ -89,6 +89,29 @@ jobs:
             sleep "$((attempt * 15))"
           done
 
+          # A wheel MR validates the current source repositories, not stale
+          # gitlink commits recorded in opencv-python-das. Keep the test-data
+          # submodule pinned, but consume the latest 4.9.0 tip of both source
+          # repositories for this build and print the exact SHAs used.
+          for submodule in opencv opencv_contrib; do
+            for attempt in 1 2 3; do
+              if git -C "${submodule}" \
+                -c http.version=HTTP/1.1 \
+                -c http.maxRequests=1 \
+                -c "http.https://github.com/.extraheader=AUTHORIZATION: basic ${auth_header}" \
+                fetch --depth 1 origin 4.9.0 && \
+                git -C "${submodule}" checkout --detach FETCH_HEAD; then
+                break
+              fi
+              [[ "${attempt}" == 3 ]] && {
+                echo "Failed to fetch latest 4.9.0 tip for ${submodule}" >&2
+                exit 1
+              }
+              sleep "$((attempt * 15))"
+            done
+            echo "${submodule}: $(git -C "${submodule}" rev-parse HEAD)"
+          done
+
       - name: Configure Python package index
         shell: bash
         run: |
