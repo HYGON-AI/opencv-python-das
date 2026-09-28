@@ -58,7 +58,18 @@ jobs:
           set -euo pipefail
           : "${SUBMODULES_READ_TOKEN:?SUBMODULES_READ_TOKEN is required}"
           auth_header="$(printf 'x-access-token:%s' "${SUBMODULES_READ_TOKEN}" | base64 | tr -d '\r\n')"
-          required_submodules=(opencv opencv_contrib)
+          required_submodules=(opencv opencv_contrib opencv_extra)
+
+          if ! command -v git-lfs >/dev/null 2>&1; then
+            if command -v dnf >/dev/null 2>&1; then
+              dnf install -y git-lfs
+            elif command -v yum >/dev/null 2>&1; then
+              yum install -y git-lfs
+            else
+              echo 'git-lfs is required to download OpenCV test data' >&2
+              exit 1
+            fi
+          fi
 
           # Self-hosted runners keep the workspace between jobs. A previously
           # interrupted clone can leave a registered submodule without HEAD,
@@ -69,6 +80,9 @@ jobs:
           for submodule in "${required_submodules[@]}"; do
             rm -rf -- "${submodule}" ".git/modules/${submodule}"
           done
+
+          git -C opencv_extra lfs install --local
+          git -C opencv_extra lfs pull --include='testdata/**'
 
           git submodule sync -- "${required_submodules[@]}"
           for attempt in 1 2 3; do
