@@ -71,6 +71,11 @@ jobs:
             fi
           fi
 
+          git config --global --add safe.directory "${GITHUB_WORKSPACE}"
+          for submodule in opencv opencv_contrib opencv_extra; do
+            git config --global --add safe.directory "${GITHUB_WORKSPACE}/${submodule}"
+          done
+
           # Self-hosted runners keep the workspace between jobs. A previously
           # interrupted clone can leave a registered submodule without HEAD,
           # which makes every subsequent update fail with "Needed a single
