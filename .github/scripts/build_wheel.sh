@@ -43,6 +43,13 @@ export ENABLE_CONTRIB=1
 export ENABLE_HEADLESS=0
 export ENABLE_ROLLING=0
 
+# setup.py normally generates this file when it sees the Git worktree.  Do it
+# before temporarily hiding .git below so package versioning remains identical
+# to the normal CI build while submodules stay on the revisions selected by the
+# workflow.
+python3 find_version.py True False False True
+test -s cv2/version.py
+
 # The workflow has already authenticated, fetched, and checked out the exact
 # OpenCV/OpenCV-contrib revisions that this wheel must build.  setup.py treats
 # the presence of the top-level .git directory as a request to run another
