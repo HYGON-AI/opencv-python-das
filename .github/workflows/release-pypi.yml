@@ -97,7 +97,7 @@ jobs:
               -c "http.https://github.com/.extraheader=AUTHORIZATION: basic ${auth_header}" \
               submodule update --init --force --recursive --depth 1 --jobs 1 -- \
               "${required_submodules[@]}"; then
-              exit 0
+              break
             fi
             if [[ "${attempt}" == 3 ]]; then
               echo "Failed to initialize required OpenCV submodules" >&2
