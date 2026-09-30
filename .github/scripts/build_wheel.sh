@@ -43,5 +43,35 @@ export ENABLE_CONTRIB=1
 export ENABLE_HEADLESS=0
 export ENABLE_ROLLING=0
 
+# The workflow has already authenticated, fetched, and checked out the exact
+# OpenCV/OpenCV-contrib revisions that this wheel must build.  setup.py treats
+# the presence of the top-level .git directory as a request to run another
+# unauthenticated `git submodule update`, which both fails for private
+# repositories and would reset the source trees to the stale gitlink commits.
+# Hide only the top-level Git metadata while setup.py runs, and always restore
+# it so actions/checkout post-job cleanup can still operate normally.
+git_metadata_backup=""
+restore_git_metadata() {
+  if [[ -n "${git_metadata_backup}" && -e "${git_metadata_backup}" ]]; then
+    mv -- "${git_metadata_backup}" .git
+  fi
+}
+
+if [[ -e .git ]]; then
+  git_metadata_backup=".git.ci-wheel-build"
+  if [[ -e "${git_metadata_backup}" ]]; then
+    echo "Refusing to overwrite existing ${git_metadata_backup}" >&2
+    exit 1
+  fi
+  mv -- .git "${git_metadata_backup}"
+  trap restore_git_metadata EXIT
+fi
+
 python3 setup.py bdist_wheel --py-limited-api=cp37 -v
+
+if [[ -n "${git_metadata_backup}" ]]; then
+  restore_git_metadata
+  trap - EXIT
+fi
+
 compgen -G 'dist/*.whl' >/dev/null
