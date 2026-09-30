@@ -1,0 +1,187 @@
+# SPDX-License-Identifier: MIT
+# Copyright (C) 2026 Hygon Information Technology Co., Ltd.
+
+name: Build and publish wheels
+
+on:
+  push:
+    branches:
+      - 4.9.0
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+  pull-requests: read
+  checks: read
+
+concurrency:
+  group: opencv-python-das-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  DTK_PKG_URL: ${{ vars.RESOURCE_SERVER_URL }}/dtk-pkg/dtk26.04/DTK-26.04-rc4-centos8-x86_64.tar.gz
+  PYPI_URL: ${{ vars.PYPI_URL }}
+  MAX_JOBS: "32"
+
+jobs:
+  build-wheel:
+    name: Build, test and publish manylinux wheel
+    runs-on: self-hosted
+    timeout-minutes: 240
+    container:
+      image: ${{ vars.BASE_COMPILE_IMAGE_ROCKY_PY310 }}
+      options: >-
+        --device=/dev/kfd
+        --device=/dev/dri/
+        --group-add video
+        -v /opt/hyhal/:/opt/hyhal/:ro
+        --shm-size=80G
+        --cap-add=SYS_PTRACE
+        --security-opt seccomp=unconfined
+        --privileged=true
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.SUBMODULES_READ_TOKEN }}
+          submodules: false
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Checkout submodules
+        shell: bash
+        env:
+          SUBMODULES_READ_TOKEN: ${{ secrets.SUBMODULES_READ_TOKEN }}
+        run: |
+          set -euo pipefail
+          : "${SUBMODULES_READ_TOKEN:?SUBMODULES_READ_TOKEN is required}"
+          auth_header="$(printf 'x-access-token:%s' "${SUBMODULES_READ_TOKEN}" | base64 | tr -d '\r\n')"
+          required_submodules=(opencv opencv_contrib opencv_extra)
+
+          if ! command -v git-lfs >/dev/null 2>&1; then
+            if command -v dnf >/dev/null 2>&1; then
+              dnf install -y git-lfs
+            elif command -v yum >/dev/null 2>&1; then
+              yum install -y git-lfs
+            else
+              echo 'git-lfs is required to download OpenCV test data' >&2
+              exit 1
+            fi
+          fi
+
+          git config --global --add safe.directory "${GITHUB_WORKSPACE}"
+          for submodule in opencv opencv_contrib opencv_extra; do
+            git config --global --add safe.directory "${GITHUB_WORKSPACE}/${submodule}"
+          done
+
+          # Self-hosted runners keep the workspace between jobs. A previously
+          # interrupted clone can leave a registered submodule without HEAD,
+          # which makes every subsequent update fail with "Needed a single
+          # revision". Remove only these generated checkout directories and
+          # their Git metadata before initializing the pinned revisions.
+          git submodule deinit --force -- "${required_submodules[@]}" || true
+          for submodule in "${required_submodules[@]}"; do
+            rm -rf -- "${submodule}" ".git/modules/${submodule}"
+          done
+
+          git -C opencv_extra lfs install --local
+          git -C opencv_extra lfs pull --include='testdata/**'
+
+          git submodule sync -- "${required_submodules[@]}"
+          for attempt in 1 2 3; do
+            if git \
+              -c http.version=HTTP/1.1 \
+              -c http.maxRequests=1 \
+              -c "http.https://github.com/.extraheader=AUTHORIZATION: basic ${auth_header}" \
+              submodule update --init --force --recursive --depth 1 --jobs 1 -- \
+              "${required_submodules[@]}"; then
+              exit 0
+            fi
+            if [[ "${attempt}" == 3 ]]; then
+              echo "Failed to initialize required OpenCV submodules" >&2
+              exit 1
+            fi
+            sleep "$((attempt * 15))"
+          done
+
+          # Publish from the current 4.9.0 tips of both source repositories;
+          # opencv_extra remains pinned for reproducible test data.
+          for submodule in opencv opencv_contrib; do
+            for attempt in 1 2 3; do
+              if git -C "${submodule}" \
+                -c http.version=HTTP/1.1 \
+                -c http.maxRequests=1 \
+                -c "http.https://github.com/.extraheader=AUTHORIZATION: basic ${auth_header}" \
+                fetch --depth 1 origin 4.9.0 && \
+                git -C "${submodule}" checkout --detach FETCH_HEAD; then
+                break
+              fi
+              [[ "${attempt}" == 3 ]] && {
+                echo "Failed to fetch latest 4.9.0 tip for ${submodule}" >&2
+                exit 1
+              }
+              sleep "$((attempt * 15))"
+            done
+            echo "${submodule}: $(git -C "${submodule}" rev-parse HEAD)"
+          done
+
+      - name: Configure Python package index
+        shell: bash
+        run: |
+          set -euo pipefail
+          index_url="${PYPI_URL}/nightly/dtk2604/+simple/"
+          trusted_host="${index_url#*://}"
+          trusted_host="${trusted_host%%/*}"
+          echo "PIP_INDEX_URL=${index_url}" >> "${GITHUB_ENV}"
+          echo "PIP_TRUSTED_HOST=${trusted_host}" >> "${GITHUB_ENV}"
+
+      - name: Install build dependencies
+        shell: bash
+        env:
+          RESOURCE_SERVER_URL: ${{ vars.RESOURCE_SERVER_URL }}
+        run: bash .github/scripts/install_dependencies.sh
+
+      - name: Build wheel
+        shell: bash
+        run: bash .github/scripts/build_wheel.sh
+
+      - name: Repair manylinux wheel
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash .github/scripts/manylinux_repair.sh dist dist-manylinux
+          mkdir -p wheelhouse
+          cp -v dist-manylinux/*.whl wheelhouse/
+          compgen -G 'wheelhouse/*.whl' >/dev/null
+          cd wheelhouse
+          sha256sum ./*.whl > SHA256SUMS
+
+      - name: Test repaired wheel
+        shell: bash
+        run: bash .github/scripts/test_wheel.sh wheelhouse
+
+      - name: Verify wheel checksums
+        if: github.event_name == 'push'
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd wheelhouse
+          sha256sum -c SHA256SUMS
+
+      - name: Publish to NIGHTLY index
+        if: github.event_name == 'push'
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          PYPI_PASSWORD: ${{ secrets.PYPI_PASSWORD }}
+        run: |
+          set -euo pipefail
+          python3 -m pip install --no-cache-dir ciupload
+          CIUpload NIGHTLY \
+            --devpi_url "${PYPI_URL}" \
+            --password "${PYPI_PASSWORD}" \
+            --dtk_pkg_name "$(basename "${DTK_PKG_URL}")" \
+            --record \
+            -f wheelhouse/*.whl
