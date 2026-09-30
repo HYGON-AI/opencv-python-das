@@ -84,9 +84,13 @@ install_system_dependencies() {
   local rhel_major
   rhel_major="$(rpm -E '%{rhel}')"
   "${package_manager}" install -y epel-release
-  "${package_manager}" install -y \
+  # The image's EPEL mirrorlist is intermittently unavailable (timeouts,
+  # 404s, and rate limits).  These RPM Fusion packages resolve against Rocky's
+  # base repositories, so do not make their installation depend on EPEL
+  # metadata being reachable.
+  "${package_manager}" --disablerepo=epel install -y \
     "https://mirrors.rpmfusion.org/free/el/rpmfusion-free-release-${rhel_major}.noarch.rpm"
-  "${package_manager}" install -y gstreamer1-libav
+  "${package_manager}" --disablerepo=epel install -y gstreamer1-libav
 
   # EPEL's current libopenmpt calls mpg123_param2, while Rocky 8 ships the
   # older mpg123 1.25 ABI without that symbol. Install a pinned compatible
