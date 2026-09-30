@@ -85,12 +85,16 @@ install_system_dependencies() {
   rhel_major="$(rpm -E '%{rhel}')"
   "${package_manager}" install -y epel-release
   # The image's EPEL mirrorlist is intermittently unavailable (timeouts,
-  # 404s, and rate limits).  These RPM Fusion packages resolve against Rocky's
-  # base repositories, so do not make their installation depend on EPEL
-  # metadata being reachable.
+  # 404s, and rate limits).  EPEL 8 is archived, so use Fedora's stable
+  # archive explicitly when resolving the RPM Fusion codec dependencies.
   "${package_manager}" --disablerepo=epel install -y \
     "https://mirrors.rpmfusion.org/free/el/rpmfusion-free-release-${rhel_major}.noarch.rpm"
-  "${package_manager}" --disablerepo=epel install -y gstreamer1-libav
+  epel_archive="https://dl.fedoraproject.org/pub/archive/epel/8/Everything/$(uname -m)/"
+  "${package_manager}" \
+    --disablerepo=epel \
+    --repofrompath="epel-archive,${epel_archive}" \
+    --refresh \
+    install -y gstreamer1-libav
 
   # EPEL's current libopenmpt calls mpg123_param2, while Rocky 8 ships the
   # older mpg123 1.25 ABI without that symbol. Install a pinned compatible
