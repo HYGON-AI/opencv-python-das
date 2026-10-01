@@ -86,9 +86,6 @@ jobs:
             rm -rf -- "${submodule}" ".git/modules/${submodule}"
           done
 
-          git -C opencv_extra lfs install --local
-          git -C opencv_extra lfs pull --include='testdata/**'
-
           git submodule sync -- "${required_submodules[@]}"
           for attempt in 1 2 3; do
             if git \
@@ -105,6 +102,12 @@ jobs:
             fi
             sleep "$((attempt * 15))"
           done
+
+          test -d opencv
+          test -d opencv_contrib
+          test -d opencv_extra
+          git -C opencv_extra lfs install --local
+          git -C opencv_extra lfs pull --include='testdata/**'
 
           # Publish from the current 4.9.0 tips of both source repositories;
           # opencv_extra remains pinned for reproducible test data.
