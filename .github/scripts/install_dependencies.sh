@@ -84,6 +84,8 @@ install_system_dependencies() {
   local rhel_major
   rhel_major="$(rpm -E '%{rhel}')"
   "${package_manager}" install -y epel-release
+  # The repository's video fixture is H.264 (avc1). RPM Fusion's signed EL
+  # package supplies avdec_h264 through gstreamer1-libav.
   "${package_manager}" install -y \
     "https://mirrors.rpmfusion.org/free/el/rpmfusion-free-release-${rhel_major}.noarch.rpm"
   "${package_manager}" install -y gstreamer1-libav
