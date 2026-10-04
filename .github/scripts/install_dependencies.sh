@@ -96,13 +96,34 @@ install_system_dependencies() {
   local mpg123_archive mpg123_source
   mpg123_build_dir="$(mktemp -d)"
   mpg123_archive="${mpg123_build_dir}/mpg123-1.32.10.tar.bz2"
-  wget \
-    --quiet \
-    --tries=3 \
-    --timeout=30 \
-    --output-document="${mpg123_archive}" \
-    "https://sourceforge.net/projects/mpg123/files/mpg123/1.32.10/mpg123-1.32.10.tar.bz2/download"
-  echo "87b2c17fe0c979d3ef38eeceff6362b35b28ac8589fbf1854b5be75c9ab6557c  ${mpg123_archive}" | sha256sum -c -
+  local mpg123_checksum="87b2c17fe0c979d3ef38eeceff6362b35b28ac8589fbf1854b5be75c9ab6557c"
+  local mpg123_urls=(
+    "https://downloads.sourceforge.net/project/mpg123/mpg123/1.32.10/mpg123-1.32.10.tar.bz2"
+    "https://mirror.math.princeton.edu/pub/macports/distfiles/mpg123/mpg123-1.32.10.tar.bz2"
+  )
+  local mpg123_url attempt downloaded=0
+  for mpg123_url in "${mpg123_urls[@]}"; do
+    for attempt in 1 2 3; do
+      echo "Downloading mpg123 (attempt ${attempt}/3): ${mpg123_url}"
+      rm -f "${mpg123_archive}"
+      if wget \
+        --timeout=30 \
+        --read-timeout=30 \
+        --tries=1 \
+        --retry-connrefused \
+        --output-document="${mpg123_archive}" \
+        "${mpg123_url}" && \
+        echo "${mpg123_checksum}  ${mpg123_archive}" | sha256sum -c -; then
+        downloaded=1
+        break 2
+      fi
+      sleep "$((attempt * 10))"
+    done
+  done
+  if [[ "${downloaded}" != 1 ]]; then
+    echo "Failed to download a valid mpg123-1.32.10 archive" >&2
+    return 1
+  fi
   tar -xjf "${mpg123_archive}" -C "${mpg123_build_dir}"
   mpg123_source="${mpg123_build_dir}/mpg123-1.32.10"
   (
