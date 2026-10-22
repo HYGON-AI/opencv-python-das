@@ -37,7 +37,7 @@ jobs:
     permissions:
       contents: read
       pull-requests: read
-      issues: write
+      issues: read
     outputs:
       authorized: ${{ steps.authorization.outputs.authorized }}
     steps:
@@ -49,10 +49,10 @@ jobs:
             const action = context.payload.action;
             const expected = context.payload.pull_request;
             const labelEvent = ["labeled", "unlabeled"].includes(action);
-            const reset = ["opened", "synchronize", "reopened", "ready_for_review"];
+            const prActions = ["opened", "synchronize", "reopened", "ready_for_review"];
             core.setOutput("authorized", "false");
             if (labelEvent && context.payload.label?.name !== label) return;
-            if (!labelEvent && !reset.includes(action)) {
+            if (!labelEvent && !prActions.includes(action)) {
               core.setFailed("Unsupported PR action: " + action);
               return;
             }
@@ -61,7 +61,7 @@ jobs:
             });
             if (pr.state !== "open" || pr.base.ref !== "4.9.0" || !pr.head.repo ||
                 pr.head.sha !== expected.head.sha || pr.base.sha !== expected.base.sha) {
-              core.setFailed("PR state/head/base changed. Trigger a fresh authorization.");
+              core.setFailed("PR state/head/base changed. Trigger a fresh build.");
               return;
             }
             const repo = context.repo.owner + "/" + context.repo.repo;
@@ -69,31 +69,30 @@ jobs:
               core.setOutput("authorized", "true");
               return;
             }
-            if (reset.includes(action)) {
-              if (pr.labels.some(item => item.name === label)) {
-                try {
-                  await github.rest.issues.removeLabel({
-                    ...context.repo, issue_number: pr.number, name: label,
-                  });
-                } catch (error) {
-                  if (error.status !== 404) throw error;
-                }
-              }
-              core.setFailed("Fork revision " + pr.head.sha + " requires a maintainer to apply ready-build.");
+            if (action === "unlabeled" || !pr.labels.some(item => item.name === label)) {
+              core.setFailed("Fork PR requires a maintainer to apply ready-build.");
               return;
             }
-            if (action === "unlabeled" || !pr.labels.some(item => item.name === label)) {
-              core.setFailed("Fork build authorization was removed.");
+            // Approval persists across PR updates until ready-build is removed.
+            // Check the label author, since later pushes can come from the contributor.
+            const events = await github.paginate(github.rest.issues.listEvents, {
+              ...context.repo, issue_number: pr.number, per_page: 100,
+            });
+            const approval = events.filter(item =>
+              ["labeled", "unlabeled"].includes(item.event) && item.label?.name === label
+            ).sort((a, b) => b.id - a.id)[0];
+            if (approval?.event !== "labeled" || !approval.actor?.login) {
+              core.setFailed("No current ready-build approval could be verified.");
               return;
             }
             const { data } = await github.rest.repos.getCollaboratorPermissionLevel({
-              ...context.repo, username: context.actor,
+              ...context.repo, username: approval.actor.login,
             });
             if (!["write", "maintain", "admin"].includes(data.permission)) {
-              core.setFailed(context.actor + " cannot authorize this build.");
+              core.setFailed(approval.actor.login + " cannot authorize this build.");
               return;
             }
-            core.info(context.actor + " authorized " + pr.head.sha);
+            core.info(approval.actor.login + " authorized PR #" + pr.number + "; building " + pr.head.sha);
             core.setOutput("authorized", "true");
 
   build-wheel:
