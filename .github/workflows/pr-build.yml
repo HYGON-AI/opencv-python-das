@@ -2,23 +2,26 @@
 # Copyright (C) 2026 Hygon Information Technology Co., Ltd.
 
 name: PR build
+run-name: "PR build - #${{ github.event.pull_request.number }}"
 
+# Install this trusted workflow on the default branch.
+# Require "PR build result" in branch protection.
 on:
-  pull_request:
-    branches:
-      - 4.9.0
-    types:
-      - opened
-      - synchronize
-      - reopened
-      - ready_for_review
+  pull_request_target:
+    branches: [4.9.0]
+    types: [opened, synchronize, reopened, ready_for_review, labeled, unlabeled]
 
 permissions:
-  actions: read
   contents: read
+  pull-requests: read
 
 concurrency:
-  group: opencv-python-das-pr-build-${{ github.event.pull_request.number }}
+  # Unrelated labels use a separate group and cannot replace a pending build.
+  group: >-
+    opencv-python-das-pr-build-${{ github.event.pull_request.number }}-${{
+      (github.event.action == 'labeled' || github.event.action == 'unlabeled') &&
+      github.event.label.name != 'ready-build' && github.run_id || 'build'
+    }}
   cancel-in-progress: true
 
 env:
@@ -27,8 +30,75 @@ env:
   MAX_JOBS: "32"
 
 jobs:
+  authorize-pr:
+    name: Authorize self-hosted build
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+      issues: read
+    outputs:
+      authorized: ${{ steps.authorization.outputs.authorized }}
+    steps:
+      - uses: actions/github-script@v7
+        id: authorization
+        with:
+          script: |
+            const label = "ready-build";
+            const action = context.payload.action;
+            const expected = context.payload.pull_request;
+            const labelEvent = ["labeled", "unlabeled"].includes(action);
+            const prActions = ["opened", "synchronize", "reopened", "ready_for_review"];
+            core.setOutput("authorized", "false");
+            if (labelEvent && context.payload.label?.name !== label) return;
+            if (!labelEvent && !prActions.includes(action)) {
+              core.setFailed("Unsupported PR action: " + action);
+              return;
+            }
+            const { data: pr } = await github.rest.pulls.get({
+              ...context.repo, pull_number: expected.number,
+            });
+            if (pr.state !== "open" || pr.base.ref !== "4.9.0" || !pr.head.repo ||
+                pr.head.sha !== expected.head.sha || pr.base.sha !== expected.base.sha) {
+              core.setFailed("PR state/head/base changed. Trigger a fresh build.");
+              return;
+            }
+            const repo = context.repo.owner + "/" + context.repo.repo;
+            if (pr.head.repo.full_name.toLowerCase() === repo.toLowerCase()) {
+              core.setOutput("authorized", "true");
+              return;
+            }
+            if (action === "unlabeled" || !pr.labels.some(item => item.name === label)) {
+              core.setFailed("Fork PR requires a maintainer to apply ready-build.");
+              return;
+            }
+            // Approval persists across PR updates until ready-build is removed.
+            // Check the label author, since later pushes can come from the contributor.
+            const events = await github.paginate(github.rest.issues.listEvents, {
+              ...context.repo, issue_number: pr.number, per_page: 100,
+            });
+            const approval = events.filter(item =>
+              ["labeled", "unlabeled"].includes(item.event) && item.label?.name === label
+            ).sort((a, b) => b.id - a.id)[0];
+            if (approval?.event !== "labeled" || !approval.actor?.login) {
+              core.setFailed("No current ready-build approval could be verified.");
+              return;
+            }
+            const { data } = await github.rest.repos.getCollaboratorPermissionLevel({
+              ...context.repo, username: approval.actor.login,
+            });
+            if (!["write", "maintain", "admin"].includes(data.permission)) {
+              core.setFailed(approval.actor.login + " cannot authorize this build.");
+              return;
+            }
+            core.info(approval.actor.login + " authorized PR #" + pr.number + "; building " + pr.head.sha);
+            core.setOutput("authorized", "true");
+
   build-wheel:
     name: Build and test manylinux wheel
+    needs: authorize-pr
+    if: needs.authorize-pr.outputs.authorized == 'true'
     runs-on: self-hosted
     timeout-minutes: 240
     container:
@@ -39,27 +109,45 @@ jobs:
         --group-add video
         -v /opt/hyhal/:/opt/hyhal/:ro
         --shm-size=80G
-        --cap-add=SYS_PTRACE
-        --security-opt seccomp=unconfined
-        --privileged=true
 
     steps:
-      - name: Checkout source
+      - name: Checkout base revision
         uses: actions/checkout@v4
         with:
-          token: ${{ secrets.SUBMODULES_READ_TOKEN }}
+          ref: ${{ github.event.pull_request.base.sha }}
           submodules: false
           fetch-depth: 0
           persist-credentials: false
 
-      - name: Checkout submodules
+      - name: Merge authorized PR revision
         shell: bash
         env:
-          SUBMODULES_READ_TOKEN: ${{ secrets.SUBMODULES_READ_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          : "${SUBMODULES_READ_TOKEN:?SUBMODULES_READ_TOKEN is required}"
-          auth_header="$(printf 'x-access-token:%s' "${SUBMODULES_READ_TOKEN}" | base64 | tr -d '\r\n')"
+          git config --global --add safe.directory "${GITHUB_WORKSPACE}"
+          test "$(git rev-parse HEAD)" = "${BASE_SHA}"
+          auth="$(printf 'x-access-token:%s' "${GH_TOKEN}" | base64 | tr -d '\r\n')"
+          echo "::add-mask::${auth}"
+          git -c "http.extraheader=AUTHORIZATION: basic ${auth}" fetch --no-tags \
+            --no-recurse-submodules origin "+refs/pull/${PR_NUMBER}/head"
+          if ! git cat-file -e "${HEAD_SHA}^{commit}"; then
+            git -c "http.extraheader=AUTHORIZATION: basic ${auth}" \
+              fetch --no-tags --no-recurse-submodules origin "${HEAD_SHA}"
+          fi
+          unset auth GH_TOKEN
+          git -c user.name='PR build' -c user.email='pr-build@localhost' \
+            merge --no-ff --no-edit "${HEAD_SHA}"
+          echo "base=${BASE_SHA} head=${HEAD_SHA} integration=$(git rev-parse HEAD)"
+
+      # Submodules and LFS objects must be anonymously readable.
+      - name: Checkout submodules
+        shell: bash
+        run: |
+          set -euo pipefail
           required_submodules=(opencv opencv_contrib opencv_extra)
 
           if ! command -v git-lfs >/dev/null 2>&1; then
@@ -93,7 +181,6 @@ jobs:
             if git \
               -c http.version=HTTP/1.1 \
               -c http.maxRequests=1 \
-              -c "http.https://github.com/.extraheader=AUTHORIZATION: basic ${auth_header}" \
               submodule update --init --force --recursive --depth 1 --jobs 1 -- \
               "${required_submodules[@]}"; then
               break
@@ -117,7 +204,6 @@ jobs:
               if git -C "${submodule}" \
                 -c http.version=HTTP/1.1 \
                 -c http.maxRequests=1 \
-                -c "http.https://github.com/.extraheader=AUTHORIZATION: basic ${auth_header}" \
                 fetch --depth 1 origin 4.9.0 && \
                 git -C "${submodule}" checkout --detach FETCH_HEAD; then
                 break
@@ -156,6 +242,7 @@ jobs:
         run: |
           set -euo pipefail
           bash .github/scripts/manylinux_repair.sh dist dist-manylinux
+          rm -rf -- wheelhouse
           mkdir -p wheelhouse
           cp -v dist-manylinux/*.whl wheelhouse/
           compgen -G 'wheelhouse/*.whl' >/dev/null
@@ -165,3 +252,45 @@ jobs:
       - name: Test repaired wheel
         shell: bash
         run: bash .github/scripts/test_wheel.sh wheelhouse
+
+  ci-result:
+    name: >-
+      ${{
+        (github.event.action == 'labeled' || github.event.action == 'unlabeled') &&
+        github.event.label.name != 'ready-build' &&
+        'Ignored label event' || 'PR build result'
+      }}
+    needs: [authorize-pr, build-wheel]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Reject cancelled runs
+        if: cancelled()
+        run: exit 1
+      - uses: actions/github-script@v7
+        env:
+          AUTH_RESULT: ${{ needs.authorize-pr.result }}
+          AUTHORIZED: ${{ needs.authorize-pr.outputs.authorized }}
+          BUILD_RESULT: ${{ needs.build-wheel.result }}
+        with:
+          script: |
+            const action = context.payload.action;
+            if (["labeled", "unlabeled"].includes(action) &&
+                context.payload.label?.name !== "ready-build") return;
+            if (process.env.AUTH_RESULT !== "success" ||
+                process.env.AUTHORIZED !== "true" || process.env.BUILD_RESULT !== "success") {
+              core.setFailed("An authorized build and all wheel tests must succeed.");
+              return;
+            }
+            const expected = context.payload.pull_request;
+            const { data: pr } = await github.rest.pulls.get({
+              ...context.repo, pull_number: expected.number,
+            });
+            const repo = context.repo.owner + "/" + context.repo.repo;
+            const sameRepo = pr.head.repo?.full_name.toLowerCase() === repo.toLowerCase();
+            if (pr.state !== "open" || pr.base.ref !== "4.9.0" || !pr.head.repo ||
+                pr.head.sha !== expected.head.sha || pr.base.sha !== expected.base.sha ||
+                (!sameRepo && !pr.labels.some(item => item.name === "ready-build"))) {
+              core.setFailed("PR state/head/base or authorization changed. A fresh build is required.");
+            }
