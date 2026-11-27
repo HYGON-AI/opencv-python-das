@@ -37,7 +37,6 @@ jobs:
     permissions:
       contents: read
       pull-requests: read
-      issues: read
     outputs:
       authorized: ${{ steps.authorization.outputs.authorized }}
     steps:
@@ -64,35 +63,21 @@ jobs:
               core.setFailed("PR state/head/base changed. Trigger a fresh build.");
               return;
             }
-            const repo = context.repo.owner + "/" + context.repo.repo;
-            if (pr.head.repo.full_name.toLowerCase() === repo.toLowerCase()) {
-              core.setOutput("authorized", "true");
+            // Each head revision requires a fresh label event from a maintainer.
+            // A label left on the PR must never authorize a later push.
+            if (action !== "labeled" || !pr.labels.some(item => item.name === label)) {
+              core.setFailed("Apply ready-build after each push. If it is already present, remove it and add it again.");
               return;
             }
-            if (action === "unlabeled" || !pr.labels.some(item => item.name === label)) {
-              core.setFailed("Fork PR requires a maintainer to apply ready-build.");
-              return;
-            }
-            // Approval persists across PR updates until ready-build is removed.
-            // Check the label author, since later pushes can come from the contributor.
-            const events = await github.paginate(github.rest.issues.listEvents, {
-              ...context.repo, issue_number: pr.number, per_page: 100,
-            });
-            const approval = events.filter(item =>
-              ["labeled", "unlabeled"].includes(item.event) && item.label?.name === label
-            ).sort((a, b) => b.id - a.id)[0];
-            if (approval?.event !== "labeled" || !approval.actor?.login) {
-              core.setFailed("No current ready-build approval could be verified.");
-              return;
-            }
+            const approver = context.payload.sender.login;
             const { data } = await github.rest.repos.getCollaboratorPermissionLevel({
-              ...context.repo, username: approval.actor.login,
+              ...context.repo, username: approver,
             });
             if (!["write", "maintain", "admin"].includes(data.permission)) {
-              core.setFailed(approval.actor.login + " cannot authorize this build.");
+              core.setFailed(approver + " cannot authorize this build.");
               return;
             }
-            core.info(approval.actor.login + " authorized PR #" + pr.number + "; building " + pr.head.sha);
+            core.info(approver + " authorized PR #" + pr.number + "; building " + pr.head.sha);
             core.setOutput("authorized", "true");
 
   build-wheel:
@@ -287,10 +272,8 @@ jobs:
             const { data: pr } = await github.rest.pulls.get({
               ...context.repo, pull_number: expected.number,
             });
-            const repo = context.repo.owner + "/" + context.repo.repo;
-            const sameRepo = pr.head.repo?.full_name.toLowerCase() === repo.toLowerCase();
             if (pr.state !== "open" || pr.base.ref !== "4.9.0" || !pr.head.repo ||
                 pr.head.sha !== expected.head.sha || pr.base.sha !== expected.base.sha ||
-                (!sameRepo && !pr.labels.some(item => item.name === "ready-build"))) {
+                !pr.labels.some(item => item.name === "ready-build")) {
               core.setFailed("PR state/head/base or authorization changed. A fresh build is required.");
             }
